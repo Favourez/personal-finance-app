@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Personal Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="total-balance">$0.00</div>
+        <div class="stat-label">Total Balance</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="monthly-income">$0.00</div>
+        <div class="stat-label">This Month Income</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="monthly-expenses">$0.00</div>
+        <div class="stat-label">This Month Expenses</div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Recent Transactions</h2>
+            <a href="/transactions" class="btn btn-primary">View All</a>
+        </div>
+        <div id="recent-transactions">
+            <p>Loading transactions...</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Monthly Spending by Category</h2>
+        </div>
+        <div id="spending-chart">
+            <p>Loading spending data...</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Quick Actions</h2>
+    </div>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <button class="btn btn-success" onclick="openTransactionModal('income')">
+            <i class="fas fa-plus"></i> Add Income
+        </button>
+        <button class="btn btn-danger" onclick="openTransactionModal('expense')">
+            <i class="fas fa-minus"></i> Add Expense
+        </button>
+        <button class="btn btn-primary" onclick="openTransactionModal('savings')">
+            <i class="fas fa-piggy-bank"></i> Add to Savings
+        </button>
+        <button class="btn btn-secondary" onclick="openTransactionModal('investment')">
+            <i class="fas fa-chart-line"></i> Add Investment
+        </button>
+    </div>
+</div>
+
+<!-- Transaction Modal -->
+<div id="transaction-modal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeTransactionModal()">&times;</span>
+        <h2 id="modal-title">Add Transaction</h2>
+        <form id="transaction-form">
+            <div class="form-group">
+                <label class="form-label">Account</label>
+                <select id="account-select" class="form-select" required>
+                    <option value="">Select Account</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="category-select" class="form-select" required>
+                    <option value="">Select Category</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Amount</label>
+                <input type="number" id="amount-input" class="form-input" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <input type="text" id="description-input" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" id="date-input" class="form-input" required>
+            </div>
+            <input type="hidden" id="transaction-type">
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeTransactionModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Transaction</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let accounts = [];
+let categories = [];
+
+// Load dashboard data
+async function loadDashboardData() {
+    try {
+        const response = await fetch('/api/dashboard-data');
+        const data = await response.json();
+        
+        // Update stats
+        document.getElementById('total-balance').textContent = `$${data.total_balance.toFixed(2)}`;
+        
+        // Calculate monthly income and expenses
+        let monthlyIncome = 0;
+        let monthlyExpenses = 0;
+        
+        data.recent_transactions.forEach(transaction => {
+            const transactionDate = new Date(transaction.date);
+            const currentDate = new Date();
+            
+            if (transactionDate.getMonth() === currentDate.getMonth() && 
+                transactionDate.getFullYear() === currentDate.getFullYear()) {
+                if (transaction.type === 'income') {
+                    monthlyIncome += transaction.amount;
+                } else if (transaction.type === 'expense') {
+                    monthlyExpenses += transaction.amount;
+                }
+            }
+        });
+        
+        document.getElementById('monthly-income').textContent = `$${monthlyIncome.toFixed(2)}`;
+        document.getElementById('monthly-expenses').textContent = `$${monthlyExpenses.toFixed(2)}`;
+        
+        // Display recent transactions
+        displayRecentTransactions(data.recent_transactions);
+        
+        // Display spending chart
+        displaySpendingChart(data.monthly_spending);
+        
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+function displayRecentTransactions(transactions) {
+    const container = document.getElementById('recent-transactions');
+    
+    if (transactions.length === 0) {
+        container.innerHTML = '<p>No recent transactions</p>';
+        return;
+    }
+    
+    const html = transactions.map(transaction => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+            <div>
+                <div style="font-weight: 500;">${transaction.description}</div>
+                <div style="font-size: 0.8rem; color: #666;">${transaction.category} • ${transaction.account}</div>
+            </div>
+            <div class="transaction-${transaction.type}">
+                ${transaction.type === 'expense' ? '-' : '+'}$${transaction.amount.toFixed(2)}
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function displaySpendingChart(spendingData) {
+    const container = document.getElementById('spending-chart');
+    
+    if (spendingData.length === 0) {
+        container.innerHTML = '<p>No spending data for this month</p>';
+        return;
+    }
+    
+    const total = spendingData.reduce((sum, item) => sum + item.total, 0);
+    
+    const html = spendingData.map(item => {
+        const percentage = (item.total / total * 100).toFixed(1);
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${item.color};"></div>
+                    <span>${item.name}</span>
+                </div>
+                <div>
+                    <span style="font-weight: 500;">$${item.total.toFixed(2)}</span>
+                    <span style="color: #666; font-size: 0.8rem;">(${percentage}%)</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+// Load accounts and categories for modal
+async function loadAccountsAndCategories() {
+    try {
+        const [accountsResponse, categoriesResponse] = await Promise.all([
+            fetch('/api/accounts'),
+            fetch('/api/categories')
+        ]);
+        
+        accounts = await accountsResponse.json();
+        categories = await categoriesResponse.json();
+        
+        populateAccountSelect();
+        
+    } catch (error) {
+        console.error('Error loading accounts and categories:', error);
+    }
+}
+
+function populateAccountSelect() {
+    const select = document.getElementById('account-select');
+    select.innerHTML = '<option value="">Select Account</option>';
+    
+    accounts.forEach(account => {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = `${account.name} ($${account.balance.toFixed(2)})`;
+        select.appendChild(option);
+    });
+}
+
+function populateCategorySelect(type) {
+    const select = document.getElementById('category-select');
+    select.innerHTML = '<option value="">Select Category</option>';
+    
+    const filteredCategories = categories.filter(cat => cat.type === type);
+    
+    filteredCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        select.appendChild(option);
+    });
+}
+
+// Modal functions
+function openTransactionModal(type) {
+    document.getElementById('transaction-modal').style.display = 'block';
+    document.getElementById('modal-title').textContent = `Add ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    document.getElementById('transaction-type').value = type;
+    document.getElementById('date-input').value = new Date().toISOString().split('T')[0];
+    
+    populateCategorySelect(type);
+}
+
+function closeTransactionModal() {
+    document.getElementById('transaction-modal').style.display = 'none';
+    document.getElementById('transaction-form').reset();
+}
+
+// Handle form submission
+document.getElementById('transaction-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        account_id: parseInt(document.getElementById('account-select').value),
+        category_id: parseInt(document.getElementById('category-select').value),
+        amount: parseFloat(document.getElementById('amount-input').value),
+        description: document.getElementById('description-input').value,
+        type: document.getElementById('transaction-type').value,
+        date: document.getElementById('date-input').value
+    };
+    
+    try {
+        const response = await fetch('/api/transactions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            closeTransactionModal();
+            loadDashboardData();
+            loadAccountsAndCategories(); // Refresh account balances
+            alert('Transaction added successfully!');
+        } else {
+            alert('Error adding transaction');
+        }
+    } catch (error) {
+        console.error('Error adding transaction:', error);
+        alert('Error adding transaction');
+    }
+});
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboardData();
+    loadAccountsAndCategories();
+});
+</script>
+{% endblock %}
