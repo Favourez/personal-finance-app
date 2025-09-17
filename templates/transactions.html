@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Transactions - Personal Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">All Transactions</h2>
+        <button class="btn btn-primary" onclick="openTransactionModal('expense')">
+            <i class="fas fa-plus"></i> Add Transaction
+        </button>
+    </div>
+    
+    <!-- Filters -->
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <select id="type-filter" class="form-select" onchange="filterTransactions()">
+                <option value="">All Types</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="savings">Savings</option>
+                <option value="investment">Investment</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <select id="category-filter" class="form-select" onchange="filterTransactions()">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <select id="account-filter" class="form-select" onchange="filterTransactions()">
+                <option value="">All Accounts</option>
+            </select>
+        </div>
+    </div>
+    
+    <div id="transactions-table">
+        <p>Loading transactions...</p>
+    </div>
+</div>
+
+<!-- Transaction Modal -->
+<div id="transaction-modal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeTransactionModal()">&times;</span>
+        <h2 id="modal-title">Add Transaction</h2>
+        <form id="transaction-form">
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <select id="type-select" class="form-select" onchange="updateCategoryOptions()" required>
+                    <option value="">Select Type</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                    <option value="savings">Savings</option>
+                    <option value="investment">Investment</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Account</label>
+                <select id="account-select" class="form-select" required>
+                    <option value="">Select Account</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="category-select" class="form-select" required>
+                    <option value="">Select Category</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Amount</label>
+                <input type="number" id="amount-input" class="form-input" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <input type="text" id="description-input" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" id="date-input" class="form-input" required>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeTransactionModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Transaction</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allTransactions = [];
+let accounts = [];
+let categories = [];
+
+// Load all data
+async function loadData() {
+    try {
+        const [transactionsResponse, accountsResponse, categoriesResponse] = await Promise.all([
+            fetch('/api/transactions'),
+            fetch('/api/accounts'),
+            fetch('/api/categories')
+        ]);
+        
+        allTransactions = await transactionsResponse.json();
+        accounts = await accountsResponse.json();
+        categories = await categoriesResponse.json();
+        
+        populateFilters();
+        displayTransactions(allTransactions);
+        
+    } catch (error) {
+        console.error('Error loading data:', error);
+    }
+}
+
+function populateFilters() {
+    // Populate category filter
+    const categoryFilter = document.getElementById('category-filter');
+    categoryFilter.innerHTML = '<option value="">All Categories</option>';
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        categoryFilter.appendChild(option);
+    });
+    
+    // Populate account filter
+    const accountFilter = document.getElementById('account-filter');
+    accountFilter.innerHTML = '<option value="">All Accounts</option>';
+    accounts.forEach(account => {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = account.name;
+        accountFilter.appendChild(option);
+    });
+    
+    // Populate modal selects
+    const accountSelect = document.getElementById('account-select');
+    accountSelect.innerHTML = '<option value="">Select Account</option>';
+    accounts.forEach(account => {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = `${account.name} ($${account.balance.toFixed(2)})`;
+        accountSelect.appendChild(option);
+    });
+}
+
+function displayTransactions(transactions) {
+    const container = document.getElementById('transactions-table');
+    
+    if (transactions.length === 0) {
+        container.innerHTML = '<p>No transactions found</p>';
+        return;
+    }
+    
+    const html = `
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${transactions.map(transaction => `
+                    <tr>
+                        <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                        <td>${transaction.description}</td>
+                        <td>
+                            <span class="category-badge" style="background-color: ${transaction.color};">
+                                ${transaction.category_name}
+                            </span>
+                        </td>
+                        <td>${transaction.account_name}</td>
+                        <td>
+                            <span class="transaction-${transaction.type}">
+                                ${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                            </span>
+                        </td>
+                        <td class="transaction-${transaction.type}">
+                            ${transaction.type === 'expense' ? '-' : '+'}$${transaction.amount.toFixed(2)}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function filterTransactions() {
+    const typeFilter = document.getElementById('type-filter').value;
+    const categoryFilter = document.getElementById('category-filter').value;
+    const accountFilter = document.getElementById('account-filter').value;
+    
+    let filteredTransactions = allTransactions;
+    
+    if (typeFilter) {
+        filteredTransactions = filteredTransactions.filter(t => t.type === typeFilter);
+    }
+    
+    if (categoryFilter) {
+        filteredTransactions = filteredTransactions.filter(t => t.category_id == categoryFilter);
+    }
+    
+    if (accountFilter) {
+        filteredTransactions = filteredTransactions.filter(t => t.account_id == accountFilter);
+    }
+    
+    displayTransactions(filteredTransactions);
+}
+
+// Modal functions
+function openTransactionModal(defaultType = '') {
+    document.getElementById('transaction-modal').style.display = 'block';
+    document.getElementById('date-input').value = new Date().toISOString().split('T')[0];
+    
+    if (defaultType) {
+        document.getElementById('type-select').value = defaultType;
+        updateCategoryOptions();
+    }
+}
+
+function closeTransactionModal() {
+    document.getElementById('transaction-modal').style.display = 'none';
+    document.getElementById('transaction-form').reset();
+}
+
+function updateCategoryOptions() {
+    const type = document.getElementById('type-select').value;
+    const categorySelect = document.getElementById('category-select');
+    
+    categorySelect.innerHTML = '<option value="">Select Category</option>';
+    
+    if (type) {
+        const filteredCategories = categories.filter(cat => cat.type === type);
+        filteredCategories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.id;
+            option.textContent = category.name;
+            categorySelect.appendChild(option);
+        });
+    }
+}
+
+// Handle form submission
+document.getElementById('transaction-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        account_id: parseInt(document.getElementById('account-select').value),
+        category_id: parseInt(document.getElementById('category-select').value),
+        amount: parseFloat(document.getElementById('amount-input').value),
+        description: document.getElementById('description-input').value,
+        type: document.getElementById('type-select').value,
+        date: document.getElementById('date-input').value
+    };
+    
+    try {
+        const response = await fetch('/api/transactions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            closeTransactionModal();
+            loadData(); // Reload all data
+            alert('Transaction added successfully!');
+        } else {
+            alert('Error adding transaction');
+        }
+    } catch (error) {
+        console.error('Error adding transaction:', error);
+        alert('Error adding transaction');
+    }
+});
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+{% endblock %}

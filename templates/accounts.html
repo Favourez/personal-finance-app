@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Accounts - Personal Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Your Accounts</h2>
+        <button class="btn btn-primary" onclick="openAccountModal()">
+            <i class="fas fa-plus"></i> Add Account
+        </button>
+    </div>
+    
+    <div id="accounts-grid">
+        <p>Loading accounts...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Account Summary</h2>
+    </div>
+    
+    <div id="account-summary">
+        <div class="summary-item">
+            <div class="summary-label">Total Balance</div>
+            <div class="summary-value" id="total-balance">$0.00</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Bank Accounts</div>
+            <div class="summary-value" id="bank-balance">$0.00</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Mobile Money</div>
+            <div class="summary-value" id="momo-balance">$0.00</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Cash</div>
+            <div class="summary-value" id="cash-balance">$0.00</div>
+        </div>
+    </div>
+</div>
+
+<!-- Account Modal -->
+<div id="account-modal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeAccountModal()">&times;</span>
+        <h2 id="account-modal-title">Add Account</h2>
+        <form id="account-form">
+            <div class="form-group">
+                <label class="form-label">Account Name</label>
+                <input type="text" id="account-name-input" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Account Type</label>
+                <select id="account-type-select" class="form-select" required>
+                    <option value="">Select Type</option>
+                    <option value="bank">Bank Account</option>
+                    <option value="momo">Mobile Money</option>
+                    <option value="cash">Cash</option>
+                    <option value="savings">Savings Account</option>
+                    <option value="investment">Investment Account</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Initial Balance</label>
+                <input type="number" id="account-balance-input" class="form-input" step="0.01" value="0" required>
+            </div>
+            <input type="hidden" id="account-id-input">
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeAccountModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="account-submit-btn">Add Account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+#accounts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.account-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 15px;
+    position: relative;
+    overflow: hidden;
+}
+
+.account-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100px;
+    height: 100px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+}
+
+.account-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.account-type {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.account-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0.5rem 0;
+}
+
+.account-balance {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.account-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.account-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background-color 0.3s;
+}
+
+.account-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+#account-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.summary-item {
+    text-align: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.summary-label {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.summary-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let accounts = [];
+
+// Load accounts
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        accounts = await response.json();
+        
+        displayAccounts();
+        updateAccountSummary();
+        
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+    }
+}
+
+function displayAccounts() {
+    const container = document.getElementById('accounts-grid');
+    
+    if (accounts.length === 0) {
+        container.innerHTML = '<p>No accounts found. Add your first account to get started.</p>';
+        return;
+    }
+    
+    const accountTypeIcons = {
+        bank: 'fas fa-university',
+        momo: 'fas fa-mobile-alt',
+        cash: 'fas fa-money-bill-wave',
+        savings: 'fas fa-piggy-bank',
+        investment: 'fas fa-chart-line'
+    };
+    
+    const html = accounts.map(account => `
+        <div class="account-card">
+            <div class="account-header">
+                <div>
+                    <div class="account-type">${account.type}</div>
+                    <div class="account-name">${account.name}</div>
+                </div>
+                <i class="${accountTypeIcons[account.type] || 'fas fa-wallet'}"></i>
+            </div>
+            <div class="account-balance">$${account.balance.toFixed(2)}</div>
+            <div class="account-actions">
+                <button class="account-btn" onclick="editAccount(${account.id})">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="account-btn" onclick="deleteAccount(${account.id})">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function updateAccountSummary() {
+    const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+    const bankBalance = accounts.filter(a => a.type === 'bank').reduce((sum, account) => sum + account.balance, 0);
+    const momoBalance = accounts.filter(a => a.type === 'momo').reduce((sum, account) => sum + account.balance, 0);
+    const cashBalance = accounts.filter(a => a.type === 'cash').reduce((sum, account) => sum + account.balance, 0);
+    
+    document.getElementById('total-balance').textContent = `$${totalBalance.toFixed(2)}`;
+    document.getElementById('bank-balance').textContent = `$${bankBalance.toFixed(2)}`;
+    document.getElementById('momo-balance').textContent = `$${momoBalance.toFixed(2)}`;
+    document.getElementById('cash-balance').textContent = `$${cashBalance.toFixed(2)}`;
+}
+
+// Modal functions
+function openAccountModal() {
+    document.getElementById('account-modal').style.display = 'block';
+    document.getElementById('account-modal-title').textContent = 'Add Account';
+    document.getElementById('account-submit-btn').textContent = 'Add Account';
+    document.getElementById('account-id-input').value = '';
+}
+
+function closeAccountModal() {
+    document.getElementById('account-modal').style.display = 'none';
+    document.getElementById('account-form').reset();
+}
+
+function editAccount(accountId) {
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) return;
+    
+    document.getElementById('account-modal').style.display = 'block';
+    document.getElementById('account-modal-title').textContent = 'Edit Account';
+    document.getElementById('account-submit-btn').textContent = 'Update Account';
+    
+    document.getElementById('account-id-input').value = account.id;
+    document.getElementById('account-name-input').value = account.name;
+    document.getElementById('account-type-select').value = account.type;
+    document.getElementById('account-balance-input').value = account.balance;
+}
+
+async function deleteAccount(accountId) {
+    if (!confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadAccounts();
+            alert('Account deleted successfully!');
+        } else {
+            alert('Error deleting account');
+        }
+    } catch (error) {
+        console.error('Error deleting account:', error);
+        alert('Error deleting account');
+    }
+}
+
+// Handle form submission
+document.getElementById('account-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const accountId = document.getElementById('account-id-input').value;
+    const formData = {
+        name: document.getElementById('account-name-input').value,
+        type: document.getElementById('account-type-select').value,
+        balance: parseFloat(document.getElementById('account-balance-input').value)
+    };
+    
+    try {
+        const url = accountId ? `/api/accounts/${accountId}` : '/api/accounts';
+        const method = accountId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            closeAccountModal();
+            loadAccounts();
+            alert(`Account ${accountId ? 'updated' : 'added'} successfully!`);
+        } else {
+            alert(`Error ${accountId ? 'updating' : 'adding'} account`);
+        }
+    } catch (error) {
+        console.error('Error with account operation:', error);
+        alert(`Error ${accountId ? 'updating' : 'adding'} account`);
+    }
+});
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', loadAccounts);
+</script>
+{% endblock %}

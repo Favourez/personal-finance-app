@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Budget - Personal Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Budget Planning</h2>
+        <button class="btn btn-primary" onclick="openBudgetModal()">
+            <i class="fas fa-plus"></i> Add Budget
+        </button>
+    </div>
+    
+    <div id="budget-overview">
+        <p>Loading budget data...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Income Allocation Planner</h2>
+    </div>
+    
+    <div class="form-group">
+        <label class="form-label">Monthly Income</label>
+        <input type="number" id="monthly-income" class="form-input" step="0.01" min="0" placeholder="Enter your monthly income">
+    </div>
+    
+    <div id="allocation-planner">
+        <div class="allocation-item">
+            <label>Essential Expenses (50%)</label>
+            <div class="allocation-bar">
+                <div class="allocation-fill" style="width: 50%; background-color: #e74c3c;"></div>
+                <span class="allocation-amount" id="essential-amount">$0.00</span>
+            </div>
+        </div>
+        
+        <div class="allocation-item">
+            <label>Savings (20%)</label>
+            <div class="allocation-bar">
+                <div class="allocation-fill" style="width: 20%; background-color: #3498db;"></div>
+                <span class="allocation-amount" id="savings-amount">$0.00</span>
+            </div>
+        </div>
+        
+        <div class="allocation-item">
+            <label>Investments (20%)</label>
+            <div class="allocation-bar">
+                <div class="allocation-fill" style="width: 20%; background-color: #8e44ad;"></div>
+                <span class="allocation-amount" id="investment-amount">$0.00</span>
+            </div>
+        </div>
+        
+        <div class="allocation-item">
+            <label>Discretionary (10%)</label>
+            <div class="allocation-bar">
+                <div class="allocation-fill" style="width: 10%; background-color: #f39c12;"></div>
+                <span class="allocation-amount" id="discretionary-amount">$0.00</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Modal -->
+<div id="budget-modal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeBudgetModal()">&times;</span>
+        <h2>Add Budget</h2>
+        <form id="budget-form">
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="budget-category-select" class="form-select" required>
+                    <option value="">Select Category</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Budget Amount</label>
+                <input type="number" id="budget-amount-input" class="form-input" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Period</label>
+                <select id="budget-period-select" class="form-select" required>
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeBudgetModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Budget</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.allocation-item {
+    margin-bottom: 1.5rem;
+}
+
+.allocation-item label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.allocation-bar {
+    position: relative;
+    height: 40px;
+    background-color: #f8f9fa;
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+
+.allocation-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.allocation-amount {
+    position: absolute;
+    right: 15px;
+    font-weight: 600;
+    color: #333;
+}
+
+.budget-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.budget-progress {
+    width: 200px;
+    height: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.budget-progress-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let categories = [];
+let budgets = [];
+
+// Load data
+async function loadBudgetData() {
+    try {
+        const [categoriesResponse, budgetsResponse] = await Promise.all([
+            fetch('/api/categories'),
+            fetch('/api/budgets')
+        ]);
+        
+        categories = await categoriesResponse.json();
+        budgets = await budgetsResponse.json();
+        
+        populateCategorySelect();
+        displayBudgetOverview();
+        
+    } catch (error) {
+        console.error('Error loading budget data:', error);
+    }
+}
+
+function populateCategorySelect() {
+    const select = document.getElementById('budget-category-select');
+    select.innerHTML = '<option value="">Select Category</option>';
+    
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        select.appendChild(option);
+    });
+}
+
+function displayBudgetOverview() {
+    const container = document.getElementById('budget-overview');
+    
+    if (budgets.length === 0) {
+        container.innerHTML = '<p>No budgets set up yet. Create your first budget to start tracking your spending goals.</p>';
+        return;
+    }
+    
+    // This would typically fetch actual spending data and compare with budgets
+    const html = budgets.map(budget => {
+        const spent = Math.random() * budget.amount; // Placeholder for actual spending
+        const percentage = (spent / budget.amount * 100).toFixed(1);
+        const category = categories.find(c => c.id === budget.category_id);
+        
+        return `
+            <div class="budget-item">
+                <div>
+                    <h4>${category ? category.name : 'Unknown Category'}</h4>
+                    <p>$${spent.toFixed(2)} of $${budget.amount.toFixed(2)} spent</p>
+                </div>
+                <div>
+                    <div class="budget-progress">
+                        <div class="budget-progress-fill" style="width: ${Math.min(percentage, 100)}%; background-color: ${percentage > 100 ? '#e74c3c' : percentage > 80 ? '#f39c12' : '#27ae60'};"></div>
+                    </div>
+                    <small>${percentage}% used</small>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+// Income allocation calculator
+document.getElementById('monthly-income').addEventListener('input', function() {
+    const income = parseFloat(this.value) || 0;
+    
+    document.getElementById('essential-amount').textContent = `$${(income * 0.5).toFixed(2)}`;
+    document.getElementById('savings-amount').textContent = `$${(income * 0.2).toFixed(2)}`;
+    document.getElementById('investment-amount').textContent = `$${(income * 0.2).toFixed(2)}`;
+    document.getElementById('discretionary-amount').textContent = `$${(income * 0.1).toFixed(2)}`;
+});
+
+// Modal functions
+function openBudgetModal() {
+    document.getElementById('budget-modal').style.display = 'block';
+}
+
+function closeBudgetModal() {
+    document.getElementById('budget-modal').style.display = 'none';
+    document.getElementById('budget-form').reset();
+}
+
+// Handle budget form submission
+document.getElementById('budget-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        category_id: parseInt(document.getElementById('budget-category-select').value),
+        amount: parseFloat(document.getElementById('budget-amount-input').value),
+        period: document.getElementById('budget-period-select').value
+    };
+    
+    try {
+        const response = await fetch('/api/budgets', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            closeBudgetModal();
+            loadBudgetData();
+            alert('Budget added successfully!');
+        } else {
+            alert('Error adding budget');
+        }
+    } catch (error) {
+        console.error('Error adding budget:', error);
+        alert('Error adding budget');
+    }
+});
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', loadBudgetData);
+</script>
+{% endblock %}

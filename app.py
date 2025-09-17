@@ -1,8 +1,5 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 import sqlite3
-import json
-from datetime import datetime, date
-import os
 
 app = Flask(__name__)
 
@@ -166,27 +163,27 @@ def get_categories():
 def handle_transactions():
     conn = sqlite3.connect('finance.db')
     cursor = conn.cursor()
-    
+
     if request.method == 'POST':
         data = request.json
         cursor.execute('''
             INSERT INTO transactions (account_id, category_id, amount, description, type, date)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (data['account_id'], data['category_id'], data['amount'], 
+        ''', (data['account_id'], data['category_id'], data['amount'],
               data['description'], data['type'], data['date']))
-        
+
         # Update account balance
         if data['type'] == 'expense':
-            cursor.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', 
+            cursor.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?',
                          (data['amount'], data['account_id']))
         else:
-            cursor.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', 
+            cursor.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?',
                          (data['amount'], data['account_id']))
-        
+
         conn.commit()
         conn.close()
         return jsonify({'success': True})
-    
+
     else:
         cursor.execute('''
             SELECT t.*, c.name as category_name, c.color, a.name as account_name
@@ -198,6 +195,68 @@ def handle_transactions():
         transactions = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
         conn.close()
         return jsonify(transactions)
+
+@app.route('/api/budgets', methods=['GET', 'POST'])
+def handle_budgets():
+    conn = sqlite3.connect('finance.db')
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        data = request.json
+        cursor.execute('''
+            INSERT INTO budgets (category_id, amount, period)
+            VALUES (?, ?, ?)
+        ''', (data['category_id'], data['amount'], data['period']))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+
+    else:
+        cursor.execute('''
+            SELECT b.*, c.name as category_name, c.color
+            FROM budgets b
+            LEFT JOIN categories c ON b.category_id = c.id
+            ORDER BY b.created_at DESC
+        ''')
+        budgets = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(budgets)
+
+@app.route('/api/accounts', methods=['POST'])
+def create_account():
+    conn = sqlite3.connect('finance.db')
+    cursor = conn.cursor()
+
+    data = request.json
+    cursor.execute('''
+        INSERT INTO accounts (name, type, balance)
+        VALUES (?, ?, ?)
+    ''', (data['name'], data['type'], data['balance']))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/accounts/<int:account_id>', methods=['PUT', 'DELETE'])
+def handle_account(account_id):
+    conn = sqlite3.connect('finance.db')
+    cursor = conn.cursor()
+
+    if request.method == 'PUT':
+        data = request.json
+        cursor.execute('''
+            UPDATE accounts SET name = ?, type = ?, balance = ?
+            WHERE id = ?
+        ''', (data['name'], data['type'], data['balance'], account_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+
+    elif request.method == 'DELETE':
+        cursor.execute('DELETE FROM accounts WHERE id = ?', (account_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
 
 if __name__ == '__main__':
     init_db()
