@@ -1,0 +1,15 @@
+#########
+Basic MVPS
+
+Build a personal finance tracking application
+possibly linked to momo and bank
+helps the user track expenditures that leave the account
+and help the user budget for future expenditures
+like helps the user budget by splitting their income to various expenditures
+various savings and various investments 
+
+##########
+Possible future work 
+
+Build Stock AI Investment predictors
+Real Estate finding and investments
